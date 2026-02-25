@@ -267,7 +267,7 @@ def parse_duration_to_duration_object(duration_raw: str):
     return None
 
 def get_portal_users():
-    """Fetch all users from users_raw.json and return a mapping of name/zuid to user zuid."""
+    """Fetch all users from users_raw.json and return a mapping of name/id to user id."""
     RAW_FILE = "users_raw.json"
     
     if not os.path.exists(RAW_FILE):
@@ -292,18 +292,19 @@ def get_portal_users():
         
         user_map = {}
         for user in users_data:
-            # Strictly use the "zuid" field from users_raw.json as the identifier
-            user_zuid = str(user.get("zuid", ""))
-            
-            # Extract different names for robust matching (e.g., from Google Sheet "Nirav")
-            full_name = str(user.get("full_name", "")).strip().lower()
-            first_name = str(user.get("first_name", "")).strip().lower()
-            display_name = str(user.get("display_name", "")).strip().lower()
-            email = str(user.get("email", "")).strip().lower()
+            # Use the "zuid" field from users_raw.json as the ZPUID
+            user_zuid = str(user.get("id", "")).strip()
             
             if user_zuid and user_zuid != "0": # Skip unassigned/empty
                 # Map various identifiers to the zuid
-                user_map[user_zuid] = user_zuid
+                user_id_raw = str(user.get("id", "")).strip()
+                user_map[user_id_raw] = user_zuid
+                
+                full_name = str(user.get("full_name", "")).strip().lower()
+                first_name = str(user.get("first_name", "")).strip().lower()
+                display_name = str(user.get("display_name", "")).strip().lower()
+                email = str(user.get("email", "")).strip().lower()
+                
                 if full_name and "unassigned" not in full_name:
                     user_map[full_name] = user_zuid
                 if first_name and "unassigned" not in first_name:
@@ -313,7 +314,7 @@ def get_portal_users():
                 if email and "unassigned" not in email:
                     user_map[email] = user_zuid
                     
-        print(f"Loaded {len(user_map)} user identifiers (full_name, first_name, display_name, emails, ZUIDs) from {RAW_FILE}.")
+        print(f"Loaded {len(user_map)} user identifiers mapping to ZUIDs from {RAW_FILE}.")
         return user_map
         
     except Exception as e:
@@ -344,10 +345,8 @@ def create_task():
     all_sheets = spreadsheet.worksheets()
 
     # Fetch all projects and users ONCE from the API
-    print("Fetching metadata from Zoho API...")
     all_projects = get_all_projects()
     user_map = get_portal_users()
-    print(f"Metadata cached--------------------: {len(all_projects)} projects, {len(user_map)} user identifiers.")
 
     created_tasks = []
     for sheet in all_sheets:
@@ -372,14 +371,25 @@ def create_task():
             duration_obj = parse_duration_to_duration_object(duration_raw)
             if duration_obj:
                 task_payload["duration"] = duration_obj
-                print(f"Duration added: {duration_obj}")
 
             # Support Name, ID, or Email from "Task Owner" column
             owner_input = str(sheet_data.get("Task Owner", "")).strip().lower()
             if owner_input:
                 zpuid = user_map.get(owner_input)
                 if zpuid:
-                    task_payload["person_responsible"] = [zpuid]
+                    # In v3, some setups require this specific owners_and_work structure
+
+                    task_payload["owners_and_work"] = {
+                        "owners": [
+                            {
+                                "add": [
+                                    {
+                                        "zpuid": zpuid
+                                    }
+                                ]
+                            }
+                        ]
+                    }
 
             # Debug: show final payload being sent
             print("Final task payload:", json.dumps(task_payload))
@@ -403,7 +413,6 @@ def create_task():
                 headers["Authorization"] = f"Zoho-oauthtoken {token}"
                 response = requests.post(url, headers=headers, json=task_payload)
 
-            print(f"Response ({response.status_code}): {response.text}")
 
             if response.status_code not in (200, 201):
                 print(f"Zoho Error: {response.text}")

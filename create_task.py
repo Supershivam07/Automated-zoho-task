@@ -230,3 +230,22 @@ print(run_fucntion)
 #         user_map[email] = zpuid
         
 #     return user_map
+
+
+
+# taskMap = Map();
+# taskMap.put("owners_and_work",{"owners":{{"add":{{"zpuid":"2031821000000045027"}}}}});
+# // Replace ZPUID of the Owner here
+# updt = invokeurl
+# [
+# url :" https://projectsapi.zoho.com/api/v3/portal/" + portal_id + "/projects/" + project_id + "/tasks/" + task_id
+# type :PATCH
+# parameters:taskMap.toString()
+# connection:"zoho_projects"
+# ];
+# info updt;
+# return "sucesss";
+
+
+# curl -X POST 'https://projectsapi.zoho.com/api/v3/portal/"739121528"/projects/"1752587000000097024"/tasks' -H 'Authorization : Zoho-oauthtoken 1000.03xxxxxxxxxxxxxxxxxa5317.dxxxxxxxxxxxxxxxxxfa' -H 'Content-Type: application/json'
+# -d '{ "tasklist" : { "id" : "4000000062001" }, "parental_info" : { "parent_task_id" : "-" }, "name" : "Demo Try Admin", "description" : "Content Try", "status" : { "id" : "4000000062001" }, "priority" : "-", "start_date" : "2021-09-30T21:00:00.000Z", "end_date" : "2021-10-05T21:00:00.000Z", "duration" : { "value" : "90", "type" : "days" }, "completion_percentage" : "-", "billing_type" : "-", "attachments" : [ 23806000073742867 ], "owners_and_work" : { "owners" : [ { "add" : [ { "zpuid" : "4000000002055", "work_values" : "-" } ], "remove" : [ { "zpuid" : "4000000002055", "work_values" : "-" } ], "zpuid" : "4000000002055", "work_values" : "-" } ], "work_type" : "-", "unit" : "days", "copy_task_duration" : "-" }, "tags" : [ { "add" : [ { "id" : "4000000062001" } ], "remove" : [ { "id" : "4000000062001" } ], "id" : "4000000062001" } ], "teams" : [ { "add" : [ { "id" : "4000000062001" } ], "remove" : [ { "id" : "4000000062001" } ], "id" : "4000000062001" } ], "recurrence" : { "frequency" : "-", "interval" : "-", "end_after_occurrences" : "-", "set_to_previous_businessday" : "-", "retain_comments" : "-", "retain_subtasks" : "-", "next_recurrence_after_close" : "-" }, "budget_info" : { "rate_per_hour" : "-", "budget" : "-", "threshold" : "-", "revenue_budget" : "-", "cost_rate_per_hour" : "-" } }'
