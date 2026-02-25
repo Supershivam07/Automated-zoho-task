@@ -27,6 +27,7 @@ TASKLIST_ID = os.getenv("ZOHO_TASKLIST_ID")
 CODE = os.getenv("ZOHO_code")
 REDIRECT_URI = os.getenv("ZOHO_REDIRECT_URI")
 access_token = os.getenv("ZOHO_ACCESS_TOKEN")
+google_sheet_name = os.getenv("google_sheet_name")
 ZOHO_TOKEN_URL = "https://accounts.zoho.com/oauth/v2/token"
 
 
@@ -224,45 +225,46 @@ def _parse_duration_to_hours(duration_raw: str):
 def parse_duration_to_duration_object(duration_raw: str):
     """Parse duration string and return duration object for Zoho API v3.
     
-    Accepts: '90', '90d', '90 days', '8h', '8 hours', '120m', '120 minutes'
-    Returns: {"value": "HH:MM", "type": "hours"} (formatted as string per API requirements)
+    Per user request: '8.55h' should be '08:55'.
+    This treats '.' as a separator for minutes when hours are specified.
     
-    Args:
-        duration_raw: Duration string from sheet
-        
-    Returns:
-        Dict with "value" and "type" keys, or None if invalid
+    Returns: {"value": "HH:MM", "type": "hours"}
     """
     if duration_raw is None or str(duration_raw).strip() == "":
         return None
     
     s = str(duration_raw).strip().lower()
     
-    # helper to format float hours to HH:MM string
-    def format_to_hh_mm(hours_float):
-        h = int(hours_float)
-        m = int(round((hours_float - h) * 60))
-        return f"{h:02d}:{m:02d}"
+    def format_to_zoho_hh_mm(h, m):
+        h_int = int(h)
+        m_int = int(m)
+        return f"{h_int:02d}:{m_int:02d}"
 
-    # days - convert to hours (1 day = 8 hours)
-    m = re.fullmatch(r"([0-9]+(?:\.[0-9]+)?)\s*(d|day|days)?", s)
-    if m:
-        value_days = float(m.group(1))
-        value_hours = value_days * 8
-        return {"value": format_to_hh_mm(value_hours), "type": "hours"}
+    # 1. Handle HH:MM format
+    if ":" in s:
+        m_colon = re.match(r"(\d+):(\d+)", s)
+        if m_colon:
+            return {"value": format_to_zoho_hh_mm(m_colon.group(1), m_colon.group(2)), "type": "hours"}
+
+    # 2. Handle HH.MM format (treating . as minute separator per user request)
+    # Match strings like 8.55h, 8.55 h, or just 8.55
+    m_dot = re.match(r"(\d+)\.(\d+)\s*(h|hr|hrs|hour|hours)?", s)
+    if m_dot:
+        return {"value": format_to_zoho_hh_mm(m_dot.group(1), m_dot.group(2)), "type": "hours"}
+
+    # 3. Handle whole numbers with or without unit
+    m_h = re.fullmatch(r"(\d+)\s*(h|hr|hrs|hour|hours)?", s)
+    if m_h:
+        return {"value": format_to_zoho_hh_mm(m_h.group(1), 0), "type": "hours"}
     
-    # hours
-    m = re.fullmatch(r"([0-9]+(?:\.[0-9]+)?)\s*(h|hr|hrs|hour|hours)", s)
-    if m:
-        value_hours = float(m.group(1))
-        return {"value": format_to_hh_mm(value_hours), "type": "hours"}
-    
-    # minutes - convert to hours
-    m = re.fullmatch(r"([0-9]+(?:\.[0-9]+)?)\s*(m|min|mins|minute|minutes)", s)
-    if m:
-        value_minutes = float(m.group(1))
-        value_hours = value_minutes / 60
-        return {"value": format_to_hh_mm(value_hours), "type": "hours"}
+    # 4. Handle days (1 day = 8 hours)
+    m_d = re.fullmatch(r"([0-9]+(?:\.[0-9]+)?)\s*(d|day|days)", s)
+    if m_d:
+        value_days = float(m_d.group(1))
+        value_hours_total = value_days * 8
+        h = int(value_hours_total)
+        m = int(round((value_hours_total - h) * 60))
+        return {"value": f"{h:02d}:{m:02d}", "type": "hours"}
     
     return None
 
@@ -342,14 +344,23 @@ def create_task():
     spreadsheet = client.open_by_key(
         "1IHBNbK5siAwRIkVKKeLPnd6r4zzNMMwyPZ3cu6THdJM"
     )
-    all_sheets = spreadsheet.worksheets()
+    
+    # Target a specific sheet as requested (e.g., "18-02")
+    target_sheet_name = google_sheet_name
+    try:
+        sheet = spreadsheet.worksheet(target_sheet_name)
+        sheets_to_process = [sheet]
+        print(f"Processing target sheet: '{target_sheet_name}'")
+    except gspread.exceptions.WorksheetNotFound:
+        print(f"Sheet '{target_sheet_name}' not found. Falling back to all sheets.")
+        sheets_to_process = spreadsheet.worksheets()
 
     # Fetch all projects and users ONCE from the API
     all_projects = get_all_projects()
     user_map = get_portal_users()
 
     created_tasks = []
-    for sheet in all_sheets:
+    for sheet in sheets_to_process:
         for sheet_data in sheet.get_all_records():
             # Get project ID
             project_code_raw = str(sheet_data.get('Project code', ''))
@@ -367,13 +378,18 @@ def create_task():
             }
 
             # 2. Add Duration (Planned Duration)
-            duration_raw = sheet_data.get("Duration", "")
+            duration_raw = str(sheet_data.get("Duration", "")).strip()
             duration_obj = parse_duration_to_duration_object(duration_raw)
             if duration_obj:
                 task_payload["duration"] = duration_obj
 
+            billing_type = sheet_data.get("Billing Type", "none")
+            if billing_type:
+                task_payload["billing_type"] = billing_type
+
             # Support Name, ID, or Email from "Task Owner" column
             owner_input = str(sheet_data.get("Task Owner", "")).strip().lower()
+            print(owner_input)
             if owner_input:
                 zpuid = user_map.get(owner_input)
                 if zpuid:
@@ -395,7 +411,7 @@ def create_task():
             print("Final task payload:", json.dumps(task_payload))
 
             PROJECT_ID = project_id  # Use the dynamically found project ID
-            parent_task_id = sheet_data.get("Parent_id")
+            parent_task_id = sheet_data.get("Task Parent ID")
             if parent_task_id and str(parent_task_id).strip() != "":
                 parent_id = str(parent_task_id).strip()
                 if not re.match(r"^[0-9]+$", parent_id):
