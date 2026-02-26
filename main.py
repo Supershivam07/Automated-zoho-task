@@ -27,20 +27,18 @@ TASKLIST_ID = os.getenv("ZOHO_TASKLIST_ID")
 CODE = os.getenv("ZOHO_code")
 REDIRECT_URI = os.getenv("ZOHO_REDIRECT_URI")
 access_token = os.getenv("ZOHO_ACCESS_TOKEN")
-google_sheet_name = os.getenv("google_sheet_name")
 ZOHO_TOKEN_URL = "https://accounts.zoho.com/oauth/v2/token"
-
 
 def get_access_token():
     url = "https://accounts.zoho.in/oauth/v2/token"
 
     # Using authorization code flow with x-www-form-urlencoded
     payload = {
-        "code": CODE,
+        "refresh_token": REFRESH_TOKEN,
         "client_id": CLIENT_ID,
         "client_secret": CLIENT_SECRET,
         "redirect_uri": REDIRECT_URI,
-        "grant_type": "authorization_code"
+        "grant_type": "refresh_token"
     }
 
     response = requests.post(url, data=payload)
@@ -69,7 +67,7 @@ def get_access_token():
     new_token = token_data["access_token"]
     os.environ["ZOHO_ACCESS_TOKEN"] = new_token
     try:
-        _write_env_var("ZOHO_ACCESS_TOKEN", new_token)
+        _write_env_var("ZOHO_ACCESS_TOKEN", str(new_token))
     except Exception:
         # non-fatal: if writing to .env fails, continue with runtime token
         print("Warning: failed to persist ZOHO_ACCESS_TOKEN to .env")
@@ -124,7 +122,7 @@ def get_all_projects():
     
     all_projects = []
     page = 1
-    per_page = 200
+    per_page = 400
     
     while True:
         params = {
@@ -324,9 +322,11 @@ def get_portal_users():
         return {}
 
 
-@app.post("/tasks")
-def create_task():
-    token = get_valid_access_token()
+@app.post("/tasks/{google_sheet_name}")
+def create_task(google_sheet_name: str):
+    # token = get_valid_access_token()
+    token = get_access_token()
+    print(token, 'new access token')
     
     headers = {
         "Authorization": f"Zoho-oauthtoken {token}",
@@ -346,6 +346,7 @@ def create_task():
     )
     
     # Target a specific sheet as requested (e.g., "18-02")
+    print(google_sheet_name, 'google sheet name')
     target_sheet_name = google_sheet_name
     try:
         sheet = spreadsheet.worksheet(target_sheet_name)
@@ -364,7 +365,10 @@ def create_task():
         for sheet_data in sheet.get_all_records():
             # Get project ID
             project_code_raw = str(sheet_data.get('Project code', ''))
-            project_key = project_code_raw.replace("CS-", "").strip()
+            project_key = project_code_raw.split("-")[-1].strip()
+
+            print(project_key, 'project key')
+        
             project_id = get_project_id_from_cache(project_key, all_projects)
             
             if not project_id:
@@ -415,7 +419,9 @@ def create_task():
             if parent_task_id and str(parent_task_id).strip() != "":
                 parent_id = str(parent_task_id).strip()
                 if not re.match(r"^[0-9]+$", parent_id):
-                    raise HTTPException(status_code=400, detail=f"Invalid Parent_id '{parent_id}'. Provide numeric Zoho task id.")
+                    # raise HTTPException(status_code=400, detail=f"Invalid Parent_id '{parent_id}'. Provide numeric Zoho task id.")
+                    print("Invalid Parent_id-------------------------------", parent_id)
+                    continue
 
                 url = f"https://projectsapi.zoho.in/api/v3/portal/{PORTAL_ID}/projects/{PROJECT_ID}/tasks"
                 task_payload["parental_info"] = {"parent_task_id": parent_id}
@@ -432,10 +438,12 @@ def create_task():
 
             if response.status_code not in (200, 201):
                 print(f"Zoho Error: {response.text}")
-                raise HTTPException(
-                    status_code=response.status_code,
-                    detail=response.text
-                )
+                # raise HTTPException(
+                #     status_code=response.status_code,
+                #     detail=response.text
+                # )
+                print("Zoho Error and task owner.-------------------------------", response.text,owner_input)
+                continue
 
             created_tasks.append(response.json())
 
