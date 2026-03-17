@@ -470,5 +470,21 @@ def get_tasks():
 
     return response.json()
 
+@app.get("/tasks/{task_id}")
+def get_task(task_id: str):
 
+    url = f"https://projectsapi.zoho.in/restapi/portal/{PORTAL_ID}/projects/{PROJECT_ID}/tasks/{task_id}/"
+    token = get_valid_access_token()
+    headers = {"Authorization": f"Zoho-oauthtoken {token}"}
+
+    response = requests.get(url, headers=headers)
+    if response.status_code in (401, 403):
+        token = get_access_token()
+        headers["Authorization"] = f"Zoho-oauthtoken {token}"
+        response = requests.get(url, headers=headers)
+
+    if response.status_code != 200:
+        raise HTTPException(status_code=response.status_code, detail="Task not found")
+
+    return response.json()
 
