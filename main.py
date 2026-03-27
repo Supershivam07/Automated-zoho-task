@@ -1,18 +1,12 @@
 from fastapi import FastAPI, HTTPException
-from pydantic import BaseModel, Field
+from pydantic import BaseModel
 import requests
 import os
 from dotenv import load_dotenv
 import gspread
 from google.oauth2.service_account import Credentials
-import requests
-import time
-import requests
-from fastapi import HTTPException
-from pathlib import Path
 import json
 import re
-from fastapi import FastAPI, HTTPException, Query
 
 load_dotenv()
 app = FastAPI()
@@ -24,76 +18,35 @@ REFRESH_TOKEN = os.getenv("ZOHO_REFRESH_TOKEN")
 PORTAL_ID = os.getenv("ZOHO_PORTAL_ID")
 PROJECT_ID = os.getenv("ZOHO_PROJECT_ID")
 TASKLIST_ID = os.getenv("ZOHO_TASKLIST_ID")
-CODE = os.getenv("ZOHO_code")
-REDIRECT_URI = os.getenv("ZOHO_REDIRECT_URI")
-access_token = os.getenv("ZOHO_ACCESS_TOKEN")
 ZOHO_TOKEN_URL = "https://accounts.zoho.com/oauth/v2/token"
+
 
 def get_access_token():
     url = "https://accounts.zoho.in/oauth/v2/token"
 
-    # Using authorization code flow with x-www-form-urlencoded
     payload = {
         "refresh_token": REFRESH_TOKEN,
         "client_id": CLIENT_ID,
         "client_secret": CLIENT_SECRET,
-        "redirect_uri": REDIRECT_URI,
+        "redirect_uri": os.getenv("ZOHO_REDIRECT_URI"),
         "grant_type": "refresh_token"
     }
 
     response = requests.post(url, data=payload)
 
-    print(response.status_code, 'status code')
-    print(response.text, 'status text')
-
     if response.status_code != 200:
         print("Zoho Token Error:", response.text)
         raise HTTPException(status_code=401, detail="Failed to get Zoho access token")
 
-    try:
-        token_data = response.json()
-    except Exception:
-        print("Invalid JSON response:", response.text)
-        raise HTTPException(status_code=500, detail="Zoho returned invalid response")
-
+    token_data = response.json()
     if "access_token" not in token_data:
-        print("Token response:", token_data)
         raise HTTPException(status_code=401, detail="Access token not found")
 
-    print("Access token obtained:---------------------------------------------------", token_data["access_token"])
-    # print("Refresh token obtained:---------------------------------------------------", token_data.get("refresh_token"))
-    print("Scope:---------------------------------------------------", token_data.get("scope"))
-    # persist access token to runtime and .env so other calls can reuse
     new_token = token_data["access_token"]
     os.environ["ZOHO_ACCESS_TOKEN"] = new_token
-    try:
-        _write_env_var("ZOHO_ACCESS_TOKEN", str(new_token))
-    except Exception:
-        # non-fatal: if writing to .env fails, continue with runtime token
-        print("Warning: failed to persist ZOHO_ACCESS_TOKEN to .env")
-
     return new_token
 
 
-def _write_env_var(key: str, value: str, env_path: str = ".env"):
-    """Write or update a key=value pair in a .env file in workspace root."""
-    p = Path(env_path)
-    lines = []
-    if p.exists():
-        lines = p.read_text(encoding="utf-8").splitlines()
-
-    key_eq = f"{key}="
-    updated = False
-    for i, line in enumerate(lines):
-        if line.startswith(key_eq):
-            lines[i] = f"{key}={value}"
-            updated = True
-            break
-
-    if not updated:
-        lines.append(f"{key}={value}")
-
-    p.write_text("\n".join(lines), encoding="utf-8")
 
 def get_valid_access_token():
     """Return a valid access token. If missing or invalid, attempt refresh using the refresh token.
@@ -342,7 +295,8 @@ def create_task(google_sheet_name: str):
     )
     client = gspread.authorize(creds)
     spreadsheet = client.open_by_key(
-        "1IHBNbK5siAwRIkVKKeLPnd6r4zzNMMwyPZ3cu6THdJM"
+        # "1IHBNbK5siAwRIkVKKeLPnd6r4zzNMMwyPZ3cu6THdJM" # original sheet ID
+        "1OiANUEPff9V_2PccEGLzExcxb8GhvI1RJLuFh8up1mk" # new sheet ID for testing purpose
     )
     
     # Target a specific sheet as requested (e.g., "18-02")
@@ -488,3 +442,276 @@ def get_task(task_id: str):
 
     return response.json()
 
+
+# --- NEW GOOGLE SHEETS USER MAPPING API --- #
+from typing import Optional
+
+class AddUserRequest(BaseModel):
+    sheet_name: str
+    name: Optional[str] = None
+
+def get_or_create_uid(raw_name: str):
+    """Helper to lookup or generate a new UID permanently."""
+    import time
+    import random
+    
+    cleaned_name = str(raw_name).strip()
+    if not cleaned_name:
+        return None
+        
+    CUSTOM_MAP_FILE = "custom_users.json"
+    user_map = {}
+    if os.path.exists(CUSTOM_MAP_FILE):
+        try:
+            with open(CUSTOM_MAP_FILE, "r") as f:
+                user_map = json.load(f)
+        except Exception:
+            pass
+            
+    lookup = cleaned_name.lower()
+    if lookup in user_map:
+        return user_map[lookup]
+        
+    new_uid = str(int(time.time() * 1000)) + str(random.randint(100000, 999999))
+    user_map[lookup] = new_uid
+    
+    with open(CUSTOM_MAP_FILE, "w") as f:
+        json.dump(user_map, f, indent=4)
+        
+    return new_uid
+
+@app.post("/add-user")
+def add_user_to_sheet(request: AddUserRequest):
+    """
+    1. COMPULSORY: Always scans existing names in the sheet and backfills missing UIDs.
+    2. OPTIONAL: Appends a brand new user row if 'name' is provided in the request.
+    """
+    try:
+        scope = ["https://www.googleapis.com/auth/spreadsheets", "https://www.googleapis.com/auth/drive"]
+        creds = Credentials.from_service_account_file("credentials.json", scopes=scope)
+        client = gspread.authorize(creds)
+        spreadsheet = client.open_by_key("1OiANUEPff9V_2PccEGLzExcxb8GhvI1RJLuFh8up1mk")
+        
+        try:
+            sheet = spreadsheet.worksheet(request.sheet_name)
+        except gspread.exceptions.WorksheetNotFound:
+            raise HTTPException(status_code=404, detail=f"Worksheet '{request.sheet_name}' not found.")
+            
+        # Get exact column coordinates
+        headers = sheet.row_values(1)
+        headers_lower = [str(h).strip().lower() for h in headers]
+        try:
+            name_col_idx = headers_lower.index("employee name") + 1
+            uid_col_idx = headers_lower.index("unique id") + 1
+        except ValueError:
+            raise HTTPException(status_code=400, detail="Missing 'Employee Name' or 'Unique ID' header in Row 1")
+
+        # Download all data to find gaps
+        all_data = sheet.get_all_values()
+        updates_made = 0
+        
+        # --- FEATURE 1: COMPULSORY BACKFILL CHECK --- #
+        # Loop through existing rows (skip row 1 which is headers)
+        for row_index_0_based, row_data in enumerate(all_data[1:]):
+            row_index = row_index_0_based + 2 # 1-based indexing for gspread
+            
+            # Safely extract name and uid cells no matter how short the row is
+            cell_name = row_data[name_col_idx - 1].strip() if len(row_data) >= name_col_idx else ""
+            cell_uid = row_data[uid_col_idx - 1].strip() if len(row_data) >= uid_col_idx else ""
+            
+            # Condition: If name exists, but UID is completely empty
+            if cell_name and not cell_uid:
+                fresh_uid = get_or_create_uid(cell_name)
+                # Physically inject the UID into the existing blank cell
+                sheet.update_cell(row_index, uid_col_idx, fresh_uid)
+                updates_made += 1
+
+        # --- FEATURE 2: APPEND NEW USER (IF PROVIDED) --- #
+        new_user_appended = False
+        appended_uid = None
+        
+        if request.name and str(request.name).strip():
+            new_name = str(request.name).strip()
+            appended_uid = get_or_create_uid(new_name)
+            
+            # Find the absolute next empty row for the name column
+            current_name_col_values = sheet.col_values(name_col_idx)
+            next_empty_row = len(current_name_col_values) + 1
+            
+            sheet.update_cell(next_empty_row, name_col_idx, new_name)
+            sheet.update_cell(next_empty_row, uid_col_idx, appended_uid)
+            
+            new_user_appended = True
+
+        return {
+            "message": "Operation Complete",
+            "backfilled_existing_users": updates_made,
+            "new_user_appended": new_user_appended,
+            "appended_name": request.name if new_user_appended else None,
+            "appended_uid": appended_uid
+        }
+        
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Google Sheets Error: {str(e)}")
+
+
+# ============================================================
+# --- NEW: COMMENT SYNC & EMAIL REMINDER FEATURE --- #
+# ============================================================
+import smtplib
+from email.mime.text import MIMEText
+from email.mime.multipart import MIMEMultipart
+
+SMTP_SENDER_EMAIL = os.getenv("SMTP_SENDER_EMAIL", "")
+SMTP_SENDER_PASSWORD = os.getenv("SMTP_SENDER_PASSWORD", "")
+COMMENT_DATA_FILE = "comment_data.json"
+
+
+def load_comment_data() -> dict:
+    """Load the user dictionary from comment_data.json."""
+    if not os.path.exists(COMMENT_DATA_FILE):
+        raise HTTPException(status_code=404, detail=f"'{COMMENT_DATA_FILE}' not found. Please create it first.")
+    with open(COMMENT_DATA_FILE, "r") as f:
+        return json.load(f)
+
+
+def send_reminder_email(to_email: str, to_name: str) -> bool:
+    """Send a 'comment missing' reminder email. Returns True on success."""
+    try:
+        msg = MIMEMultipart("alternative")
+        msg["Subject"] = "Action Required: Your comment is not added in your task"
+        msg["From"] = SMTP_SENDER_EMAIL
+        msg["To"] = to_email
+
+        body = f"""Hi {to_name},
+
+This is a gentle reminder that your comment has not been added to your assigned task yet.
+
+Please log into the system and add your comment at your earliest convenience.
+
+Thanks,
+Creole Studios Team"""
+
+        msg.attach(MIMEText(body, "plain"))
+
+        with smtplib.SMTP_SSL("smtp.gmail.com", 465) as server:
+            server.login(SMTP_SENDER_EMAIL, SMTP_SENDER_PASSWORD)
+            server.sendmail(SMTP_SENDER_EMAIL, to_email, msg.as_string())
+
+        print(f"[Email] Sent reminder to {to_name} at {to_email}")
+        return True
+
+    except Exception as e:
+        print(f"[Email Error] Failed to send to {to_email}: {e}")
+        return False
+
+
+@app.post("/sync-comments/{sheet_name}")
+def sync_comments(sheet_name: str):
+    """
+    Reads comment_data.json and syncs Hours + Is Commented into the Google Sheet.
+    - For each name found in the sheet, fills in their hours and comment status.
+    - If is_commented is False, sends a reminder email to their address.
+    - If the email is sent successfully, writes 'Email Sent' in the 'Email Sent Status' column.
+    """
+    # Load the user dictionary
+    comment_data = load_comment_data()
+
+    # Build a quick lookup: lowercase name -> user dict
+    name_lookup = {v["name"].lower(): v for v in comment_data.values()}
+
+    # Connect to Google Sheets (reuse existing auth pattern)
+    scope = [
+        "https://www.googleapis.com/auth/spreadsheets",
+        "https://www.googleapis.com/auth/drive"
+    ]
+    creds = Credentials.from_service_account_file("credentials.json", scopes=scope)
+    client = gspread.authorize(creds)
+    spreadsheet = client.open_by_key("1OiANUEPff9V_2PccEGLzExcxb8GhvI1RJLuFh8up1mk")
+
+    try:
+        sheet = spreadsheet.worksheet(sheet_name)
+    except gspread.exceptions.WorksheetNotFound:
+        raise HTTPException(status_code=404, detail=f"Worksheet '{sheet_name}' not found.")
+
+    # Read headers from row 1 and find the required columns
+    raw_headers = sheet.row_values(1)
+    headers_lower = [h.strip().lower() for h in raw_headers]
+
+    def col_idx(name: str):
+        """Returns 1-based column index for the given header name (case-insensitive)."""
+        try:
+            return headers_lower.index(name.lower()) + 1
+        except ValueError:
+            return None
+
+    name_col = col_idx("name")
+    hours_col = col_idx("hours")
+    is_commented_col = col_idx("is commented")
+    email_status_col = col_idx("email sent status")
+
+    if not name_col:
+        raise HTTPException(status_code=400, detail="'Name' column not found in the sheet header row.")
+
+    # Read all values
+    all_rows = sheet.get_all_values()
+
+    results = []
+    batch_updates = []          # Collect all cell changes here first
+    email_status_writes = []    # Track email-sent rows separately (written after emails sent)
+
+    for row_idx_0, row in enumerate(all_rows[1:], start=2):  # Skip header, 1-based row index
+        # Get the name from the Name column (handle short rows safely)
+        cell_name = row[name_col - 1].strip() if len(row) >= name_col else ""
+        if not cell_name:
+            continue  # Skip blank rows
+
+        user = name_lookup.get(cell_name.lower())
+        if not user:
+            print(f"[Skip] '{cell_name}' not found in comment_data.json")
+            continue
+
+        # --- Queue Hours update ---
+        if hours_col:
+            hours_value = user["hours"]
+            hours_str = json.dumps(hours_value) if isinstance(hours_value, dict) else str(hours_value)
+            batch_updates.append({
+                "range": gspread.utils.rowcol_to_a1(row_idx_0, hours_col),
+                "values": [[hours_str]]
+            })
+
+        # --- Queue Is Commented update ---
+        comment_value = "True" if user["is_commented"] else "False"
+        if is_commented_col:
+            batch_updates.append({
+                "range": gspread.utils.rowcol_to_a1(row_idx_0, is_commented_col),
+                "values": [[comment_value]]
+            })
+
+        # --- Send Email if Not Commented (still per-user, but fast) ---
+        email_sent = False
+        if not user["is_commented"]:
+            email_sent = send_reminder_email(user["email"], user["name"])
+            if email_sent and email_status_col:
+                email_status_writes.append({
+                    "range": gspread.utils.rowcol_to_a1(row_idx_0, email_status_col),
+                    "values": [["Email Sent"]]
+                })
+
+        results.append({
+            "name": user["name"],
+            "hours_written": user["hours"],
+            "is_commented": user["is_commented"],
+            "email_sent": email_sent
+        })
+
+    # --- ONE single batch write for all hours + comment values ---
+    all_updates = batch_updates + email_status_writes
+    if all_updates:
+        sheet.batch_update(all_updates)
+
+    return {
+        "message": "Sync complete!",
+        "sheet": sheet_name,
+        "processed": results
+    }

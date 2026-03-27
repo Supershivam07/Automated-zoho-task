@@ -1,0 +1,11 @@
+{
+    "1": {
+        "name": "EmployeeName",
+        "hours": {
+            "non_billable_hours": "0.00",
+            "billable_hours": "0.00"
+        },
+        "is_commented": false,
+        "email": "employee@example.com"
+    }
+}

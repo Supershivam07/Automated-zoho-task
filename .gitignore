@@ -153,3 +153,13 @@ cython_debug/
 # Project Specific
 credentials.json
 users_raw.json
+custom_users.json
+comment_data.json
+
+# Test / Debug scripts (keep local only)
+test_add_user.py
+test_parser.py
+test_zoho_comments.py
+test_emails.py
+generate_access_token.py
+create_task.py
