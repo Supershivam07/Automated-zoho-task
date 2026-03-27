@@ -173,8 +173,9 @@ See [`.env.example`](.env.example) for a full template.
 - ✅ `.env` is excluded from Git
 - ✅ `credentials.json` is excluded from Git
 - ✅ `comment_data.json` (contains emails) is excluded from Git
+- ✅ `users_raw.json` (contains real user data) is excluded from Git
 - ✅ All test/debug scripts are excluded from Git
-- 📄 Use `.env.example` and `comment_data.example.json` as safe references
+- 📄 Use `.env.example`, `comment_data.example.json` and `users_raw.example.json` as safe references
 
 ---
 
@@ -182,12 +183,13 @@ See [`.env.example`](.env.example) for a full template.
 
 ```
 📦 Automated-zoho-task-functionality
- ┣ 📜 main.py                    # All FastAPI routes and business logic
- ┣ 📜 requirement.txt            # Python dependencies
- ┣ 📄 .env.example               # Environment variable template (safe to commit)
- ┣ 📄 comment_data.example.json  # User data template (safe to commit)
- ┣ 📄 .gitignore                 # Excludes sensitive files
- ┗ 📖 README.md                  # You are here!
+ ┣ 📜 main.py                      # All FastAPI routes and business logic
+ ┣ 📜 requirement.txt              # Python dependencies
+ ┣ 📄 .env.example                 # Environment variable template (safe to commit)
+ ┣ 📄 comment_data.example.json    # User sync database template (safe to commit)
+ ┣ 📄 users_raw.example.json       # Zoho users registry template (safe to commit)
+ ┣ 📄 .gitignore                   # Excludes sensitive files
+ ┗ 📖 README.md                    # You are here!
 ```
 
 ---
@@ -201,10 +203,6 @@ See [`.env.example`](.env.example) for a full template.
 5. The server auto-refreshes the access token on every request — zero manual intervention!
 
 ---
-
-## 🤝 Contributing
-
-Pull requests are welcome! For major changes, please open an issue first to discuss what you'd like to change.
 
 ---
 
@@ -228,8 +226,8 @@ This project is the result of collaborative work at **Creole Studios**! Here's w
 
 ## 📬 Contact
 
-- **Nirav Kadia** — Original Architect | Creole Studios
-- **Shivam Raval** — Feature Developer | Creole Studios
+- **Nirav Kadia** — Original Architect
+- **Shivam Raval** — Feature Developer
 
 Built with ❤️ at **Creole Studios**
 
