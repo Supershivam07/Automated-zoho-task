@@ -1,0 +1,100 @@
+{
+  "page_info": {
+    "per_page": 100,
+    "has_next_page": false,
+    "count": 2,
+    "page": 1
+  },
+  "users": [
+    {
+      "business_hours": {
+        "working_hours": [],
+        "name": "Standard Business Hours",
+        "id": "00000000000000001",
+        "version": "0"
+      },
+      "updated_time": "2025-01-01T10:00:00.000Z",
+      "added_time": "2024-01-01T10:00:00.000Z",
+      "is_active": true,
+      "role": {
+        "name": "Administrator",
+        "id": "00000000000000003",
+        "type": "1"
+      },
+      "time_of_request": "1969-12-31T23:59:59.999Z",
+      "is_confirmed": true,
+      "profile": {
+        "name": "Portal Owner",
+        "id": "00000000000000335",
+        "type": "1",
+        "is_default": true
+      },
+      "last_name": "Doe",
+      "reporting_to": {
+        "full_name": "zp.general.none",
+        "id": "00000000000000605",
+        "zuid": "-1"
+      },
+      "display_name": "John",
+      "zuid": "10000000001",
+      "last_accessed_on": "2025-06-01T09:00:00.000Z",
+      "full_name": "John Doe",
+      "user_type": "1",
+      "associated_services": [],
+      "id": "00000000000000619",
+      "invoice": "0.0",
+      "first_name": "John",
+      "email": "john.doe@yourcompany.com",
+      "status": "1",
+      "budget": {
+        "rate_per_hour": "0.0",
+        "cost_per_hour": "0.0"
+      }
+    },
+    {
+      "business_hours": {
+        "working_hours": [],
+        "name": "Standard Business Hours",
+        "id": "00000000000000001",
+        "version": "0"
+      },
+      "updated_time": "2025-01-15T10:00:00.000Z",
+      "added_time": "2024-03-01T10:00:00.000Z",
+      "is_active": true,
+      "role": {
+        "name": "Employee",
+        "id": "00000000000000007",
+        "type": "1"
+      },
+      "time_of_request": "1969-12-31T23:59:59.999Z",
+      "is_confirmed": true,
+      "profile": {
+        "name": "Employee",
+        "id": "00000000000000344",
+        "type": "7",
+        "is_default": true
+      },
+      "last_name": "Smith",
+      "reporting_to": {
+        "full_name": "zp.general.none",
+        "id": "00000000000000605",
+        "zuid": "-1"
+      },
+      "display_name": "Jane",
+      "zuid": "10000000002",
+      "last_accessed_on": "2025-06-15T09:00:00.000Z",
+      "full_name": "Jane Smith",
+      "user_type": "1",
+      "associated_services": [],
+      "id": "00000000000042421",
+      "invoice": "0.0",
+      "first_name": "Jane",
+      "email": "jane.smith@yourcompany.com",
+      "status": "1",
+      "budget": {
+        "rate_per_hour": "0.0",
+        "cost_per_hour": "0.0"
+      }
+    }
+  ]
+}

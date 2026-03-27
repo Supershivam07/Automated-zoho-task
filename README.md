@@ -208,10 +208,32 @@ Pull requests are welcome! For major changes, please open an issue first to disc
 
 ---
 
+## 🏆 Credits
+
+This project is the result of collaborative work at **Creole Studios**! Here's who built what:
+
+### 🔧 Original Foundation — Nirav Kadia
+> **Nirav Kadia** built the entire original Zoho Projects automation from scratch.
+> He designed and implemented the **core task creation engine** — the Zoho OAuth flow, bulk task creation from Google Sheets, project code resolution, parent-child task assignment, duration parsing, and user assignment via the Zoho API.
+> All the foundational architecture that makes this project work is his work. 🙌
+
+### ✨ Extended Features — Shivam Raval
+> **Shivam Raval** extended the project with three new automation features:
+> - 👤 **Google Sheets User Mapper** — Smart UID backfilling and employee onboarding automation
+> - 📧 **Comment Sync & Gmail Reminder** — Reading from a user database, syncing hours/comment status to Sheets, and auto-emailing non-commenters
+> - ⚡ **Batch Sheet Optimization** — Rewrote sheet writes to use a single batch API call eliminating 2+ minute delays
+> - 📖 **Documentation & GitHub Setup** — README, `.env.example`, and clean repository management
+
+---
+
 ## 📬 Contact
+
+- **Nirav Kadia** — Original Architect | Creole Studios
+- **Shivam Raval** — Feature Developer | Creole Studios
 
 Built with ❤️ at **Creole Studios**
 
 ---
 
 *If this project saved you hours of manual work, consider giving it a ⭐ on GitHub!*
+
